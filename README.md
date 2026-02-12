@@ -203,6 +203,8 @@ The experiment database contains **258 experiments** across:
 
 If you use this code or database, please cite:
 
+> E. Chason, T. Su, Z. Rao, "Computational tool for analyzing stress in thin films," *Surface and Coatings Technology*, vol. 474, 130099 (2023). [DOI: 10.1016/j.surfcoat.2023.130099](https://doi.org/10.1016/j.surfcoat.2023.130099)
+
 > T. Su, Z. Rao, S. Berman, D. Depla, E. Chason, "Analysis of stress in sputter-deposited films using a kinetic model for Cu, Ni, Co, Cr, Mo, W," *Applied Surface Science*, vol. 613, 156000 (2023). [DOI: 10.1016/j.apsusc.2022.156000](https://doi.org/10.1016/j.apsusc.2022.156000)
 
 ## Author
