@@ -2,7 +2,7 @@
 
 **Kinetic Modeling Of Residual Film Stress** — Database-driven version.
 
-A physics-informed machine learning framework for modeling residual stress evolution in thin film materials during Physical Vapor Deposition (PVD). Uses a CSV database backend with 258 experiments across 54 materials from 24 published data sources.
+A physics-informed machine learning framework for modeling residual stress evolution in thin film materials deposited by magnetron sputtering, thermal evaporation, and e-beam evaporation. Uses a CSV database backend with 258 experiments across 54 materials from 24 published data sources.
 
 ## Quick Start
 
@@ -197,6 +197,13 @@ The experiment database contains **258 experiments** across:
 
 - **54 materials**: Pure metals (Ag, Co, Cr, Cu, Fe, Mo, Ni, Pt, Ti, V, W) and binary alloys (Cr-W, V-W, V-Mo, Cu-Ni, Cu-V, Fe-Cr, Fe-Pt, Fe-W, Ag-Cu, Ti-W)
 - **24 data sources**: Abermann, Chason, Chocyk, Fillon, Floro, Flototto, Friesen, Fu, Hoffman, Johnson, Kaub, Klokholm, Koch, Koenig, Lumbeeck, Pletea, Scheeweis, Seel, Shull, Su, Thurner, Winau, Yu, Zhou
+- **3 deposition methods**: Magnetron sputtering (196 experiments), thermal evaporation (51), e-beam evaporation (11)
+
+## References
+
+If you use this code or database, please cite:
+
+> T. Su, Z. Rao, S. Berman, D. Depla, E. Chason, "Analysis of stress in sputter-deposited films using a kinetic model for Cu, Ni, Co, Cr, Mo, W," *Applied Surface Science*, vol. 613, 156000 (2023). [DOI: 10.1016/j.apsusc.2022.156000](https://doi.org/10.1016/j.apsusc.2022.156000)
 
 ## Author
 
