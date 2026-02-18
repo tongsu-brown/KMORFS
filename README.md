@@ -24,6 +24,10 @@ python fit_general_stress.py
 # Alloy mode: fit Cr-W binary alloys with rule of mixtures
 cd alloy_extension_stress_thickness
 python fit_alloy_stress.py
+
+# Incremental mode: fit Ti-Zr-N steady-state stress
+cd incremental_stress
+python fit_incremental_stress.py
 ```
 
 ### 3. Or open an example notebook
@@ -62,6 +66,7 @@ KMORFS-db/
 │   ├── stress_equation_notorch.py              # NumPy-only batch stress equation
 │   ├── stress_equation_early_state.py          # Early-state ellipsoidal grain-cap model
 │   ├── data_utils.py                           # load_from_database(), RawData_extract()
+│   ├── mainfile_utils.py                       # mainfile.xlsx parsers for all modes
 │   ├── model.py                                # GeneralSTFModel & AlloySTFModel
 │   └── alloy_extension.py                      # AlloyMaterialDependentExtension
 ├── general_stress_thickness/                   # Mode 1: General fitting
@@ -76,8 +81,10 @@ KMORFS-db/
 │       ├── alloy_CrW_example.ipynb             # Cr-W binary alloys
 │       └── alloy_VMo_example.ipynb             # V-Mo binary alloys
 ├── incremental_stress/                         # Mode 3: Steady-state stress fitting
-│   ├── Ti-Zr-N.csv
-│   └── Ti_Zr_N_SSSF_showcase.ipynb
+│   ├── fit_incremental_stress.py
+│   ├── mainfile.xlsx                           # Initial guesses, bounds, data config
+│   ├── Ti-Zr-N.csv                            # Example SSSF dataset
+│   └── Ti_Zr_N_SSSF_showcase.ipynb            # Tutorial notebook
 └── early_state_stress_thickness/               # Mode 4: Early-state fitting
     ├── fit_early_state_stress.py
     ├── data/{Ag,Au,Ni}/                        # xlsx experiment data
@@ -142,11 +149,27 @@ DATA_SOURCES = ["Su"]
 
 ### Mode 3: Incremental / Steady-State Stress Fitting
 
-Demonstrates the steady-state stress fitting (SSSF) model on Ti-Zr-N nitride data, where stress depends on deposition rate rather than thickness. Uses SciPy L-BFGS-B optimization with NumPy (no PyTorch required).
+Models steady-state stress as a function of deposition rate (rather than thickness) for multi-composition systems. Alloy-dependent parameters are blended from pure-element endpoints via rule of mixtures. Uses SciPy L-BFGS-B optimization with NumPy (no PyTorch required).
 
+| Parameter type | Per | Parameters |
+|---|---|---|
+| Process | Dataset | R, P, T |
+| Material (independent) | Composition | sigma0, betaD, diffusivity, p0, grainSize |
+| Material (alloy-blended) | Composition | lprime, aprime, bprime |
+
+**Run the script:**
 ```bash
-jupyter notebook incremental_stress/Ti_Zr_N_SSSF_showcase.ipynb
+cd incremental_stress
+python fit_incremental_stress.py
 ```
+
+**Configure** by editing `mainfile.xlsx`:
+- Parameter initial guesses and bounds (rows 3–5)
+- `data_file` column: CSV filename (e.g. `Ti-Zr-N.csv`)
+- `material_map` column: maps CSV material names to composition values (e.g. `TiN=0;ZrN=1;TiZrN2=0.5`)
+
+**Tutorial notebook:**
+- `Ti_Zr_N_SSSF_showcase.ipynb` — Step-by-step walkthrough of the Ti-Zr-N fitting
 
 ### Mode 4: Early-State Stress-Thickness Fitting
 
