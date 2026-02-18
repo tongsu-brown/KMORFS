@@ -35,18 +35,19 @@ import torch.nn as nn
 
 # Add repo root to path so we can import the shared kmorfs package
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from kmorfs import load_from_database, GeneralSTFModel
+from kmorfs import load_from_database, load_from_mainfile_data, GeneralSTFModel
+from kmorfs.mainfile_utils import parse_mainfile_general, compute_bounds
 
-# ===== USER CONFIGURATION =====
-# Specify materials to fit (must match 'material' column in source.csv)
-MATERIALS = ["Cr", "V", "W"]
+# ===== FALLBACK CONFIGURATION =====
+# Used ONLY when mainfile.xlsx is absent.  When mainfile.xlsx exists the
+# material list is read from its rows — edit the Excel file, not Python.
+_FALLBACK_MATERIALS = ["Cr", "V", "W"]
+_FALLBACK_DATA_SOURCES = ["Su"]
+# ==================================
 
-# Filter by data_source (None = use all sources for selected materials)
-DATA_SOURCES = ["Su"]  # Use Su's unpublished data by default
-# ===============================
-
-# Default initial guesses per material (known good starting values)
-MATERIAL_DEFAULTS = {
+# Fallback initial guesses per material — used ONLY when mainfile.xlsx is absent.
+# To change initial guesses or bounds, edit mainfile.xlsx (no Python needed).
+_FALLBACK_MATERIAL_DEFAULTS = {
     "Cr": {
         "SigmaC": 0, "K0": 0, "alpha1": 0.02, "L0": 10, "GrainSize_200": 17.59,
         "Sigma0": 10, "BetaD": 0.1, "Ea": 0, "Mfda": 35.31, "Di": 0.5,
@@ -69,8 +70,8 @@ MATERIAL_DEFAULTS = {
     },
 }
 
-# Fallback defaults for materials without known starting values
-DEFAULT_PARAMS = {
+# Generic fallback for materials not listed anywhere
+_FALLBACK_GENERIC = {
     "SigmaC": 0, "K0": 0, "alpha1": 0.02, "L0": 10, "GrainSize_200": 15,
     "Sigma0": 10, "BetaD": 0.05, "Ea": 0, "Mfda": 20, "Di": 0.3,
     "A0": -3, "B0": -8, "l0": 0.8,
@@ -89,6 +90,8 @@ REPO_ROOT = SCRIPT_DIR.parent
 OUTPUT_DIR = SCRIPT_DIR / "output"
 SOURCE_CSV = REPO_ROOT / "data" / "source.csv"
 EXPERIMENTS_CSV = REPO_ROOT / "data" / "all_experiments.csv"
+MAINFILE_PATH = SCRIPT_DIR / "mainfile.xlsx"
+MAINFILE_DATA_DIR = SCRIPT_DIR / "mainfile_data"
 
 # Plot colors
 COLORS = np.array([
@@ -97,12 +100,35 @@ COLORS = np.array([
 ])
 
 
-def get_material_params(material):
-    """Get initial parameter guesses for a material."""
-    return MATERIAL_DEFAULTS.get(material, DEFAULT_PARAMS).copy()
+def get_material_params(material, mainfile_params=None):
+    """Get initial parameter guesses for a material.
+
+    When mainfile.xlsx is loaded (mainfile_params is not None), it is the
+    primary source.  Hardcoded fallbacks are only used for materials that
+    do not appear in the mainfile.
+
+    Parameters
+    ----------
+    material : str
+        Material name (e.g. "Cr").
+    mainfile_params : dict or None
+        Parsed mainfile dict with 'material_defaults' and 'process_defaults'.
+    """
+    if mainfile_params:
+        mat_defaults = mainfile_params.get('material_defaults', {})
+        proc_defaults = mainfile_params.get('process_defaults', {})
+        if material in mat_defaults or material in proc_defaults:
+            params = _FALLBACK_GENERIC.copy()
+            params.update(mat_defaults.get(material, {}))
+            params.update(proc_defaults.get(material, {}))
+            return params
+
+    # Fallback: material not in mainfile (or no mainfile at all)
+    return _FALLBACK_MATERIAL_DEFAULTS.get(material, _FALLBACK_GENERIC).copy()
 
 
-def build_config(process_condition, experiment_labels):
+def build_config(process_condition, experiment_labels, mainfile_params=None,
+                 dataset_process_defaults=None):
     """
     Build a config-like DataFrame from database results,
     matching the format expected by setup_parameters().
@@ -113,6 +139,12 @@ def build_config(process_condition, experiment_labels):
         DataFrame with R, T, P, Melting_T columns (one row per experiment)
     experiment_labels : list of str
         Experiment labels (used as Fit_data column)
+    mainfile_params : dict or None
+        Parsed mainfile dict from parse_mainfile_general().
+    dataset_process_defaults : list of dict or None
+        Per-dataset process parameter overrides (from file-based mainfile).
+        When provided, these values are used instead of the uniform per-material
+        defaults from process_defaults.
 
     Returns
     -------
@@ -143,7 +175,7 @@ def build_config(process_condition, experiment_labels):
 
     for i, label in enumerate(experiment_labels):
         mat = material_names[i]
-        params = get_material_params(mat)
+        params = get_material_params(mat, mainfile_params)
         mt = process_condition.iloc[i]['Melting_T']
 
         row = {
@@ -154,9 +186,14 @@ def build_config(process_condition, experiment_labels):
             'Melting_T': mt,
         }
 
-        # Process params (per dataset)
-        for col in process_cols:
-            row[col] = params[col]
+        # Process params (per dataset) — use dataset_process_defaults if available
+        if dataset_process_defaults is not None:
+            ds_proc = dataset_process_defaults[i]
+            for col in process_cols:
+                row[col] = ds_proc.get(col, params[col])
+        else:
+            for col in process_cols:
+                row[col] = params[col]
 
         # Material params (only first occurrence of each material)
         if mt not in seen_materials:
@@ -172,12 +209,20 @@ def build_config(process_condition, experiment_labels):
     return pd.DataFrame(rows)
 
 
-def setup_parameters(mainfile):
+def setup_parameters(mainfile, mainfile_params=None):
     """
     Setup initial parameters and bounds for optimization.
 
     Process params (per dataset): SigmaC, K0, alpha1, L0, GrainSize_200
     Material params (per material): Sigma0, BetaD, Ea, Mfda, Di, A0, B0, l0
+
+    Parameters
+    ----------
+    mainfile : pd.DataFrame
+        Config DataFrame from build_config().
+    mainfile_params : dict or None
+        Parsed mainfile dict from parse_mainfile_general(). When present,
+        bound_types and bound_mags from the Excel file are used.
     """
     process_condition = mainfile[['R', 'T', 'P', 'Melting_T']]
 
@@ -194,35 +239,59 @@ def setup_parameters(mainfile):
     process_1d = initial_process.values.flatten()
     x_vector = np.concatenate([materials_1d, process_1d])
 
-    # Bound multipliers
+    # Default bound multipliers (used when no mainfile present)
     # [Sigma0, BetaD, Ea, Mfda, Di, A0, B0, l0]
     materials_bound = np.array([2, 2, 1, 0.5, 1, 0.8, 0.8, 0.2])
     # [SigmaC, K0, alpha1, L0, GrainSize_200]
     process_bound = np.array([6, 300, 4, 1, 0.5])
 
-    # Compute material bounds (multiplicative)
-    materials_lb = initial_materials.copy().astype(float)
-    materials_ub = initial_materials.copy().astype(float)
-    for i in range(len(materials_bound)):
-        f1 = initial_materials.iloc[:, i] * (1 / (1 + materials_bound[i]))
-        f2 = initial_materials.iloc[:, i] * (1 + materials_bound[i])
-        materials_lb.iloc[:, i] = np.minimum(f1, f2)
-        materials_ub.iloc[:, i] = np.maximum(f1, f2)
+    if mainfile_params:
+        bound_types = mainfile_params.get('bound_types', {})
+        bound_mags = mainfile_params.get('bound_mags', {})
 
-    # Compute process bounds
-    process_lb = initial_process.copy().astype(float)
-    process_ub = initial_process.copy().astype(float)
+        # Compute material bounds using mainfile-specified types/magnitudes
+        materials_lb = initial_materials.copy().astype(float)
+        materials_ub = initial_materials.copy().astype(float)
+        for i, col in enumerate(material_cols):
+            bt = bound_types.get(col, 4)
+            bm = bound_mags.get(col, materials_bound[i])
+            lb, ub = compute_bounds(bt, bm, initial_materials.iloc[:, i].values)
+            materials_lb.iloc[:, i] = lb
+            materials_ub.iloc[:, i] = ub
 
-    # SigmaC, alpha1, L0, GrainSize_200: zero lower bound, multiplicative upper
-    for i in [0, 2, 3, 4]:
-        f1 = 0
-        f2 = initial_process.iloc[:, i] * (1 + process_bound[i])
-        process_lb.iloc[:, i] = np.minimum(f1, f2)
-        process_ub.iloc[:, i] = np.maximum(f1, f2)
+        # Compute process bounds using mainfile-specified types/magnitudes
+        process_lb = initial_process.copy().astype(float)
+        process_ub = initial_process.copy().astype(float)
+        for i, col in enumerate(process_cols):
+            bt = bound_types.get(col, 5 if col != 'K0' else 3)
+            bm = bound_mags.get(col, process_bound[i])
+            lb, ub = compute_bounds(bt, bm, initial_process.iloc[:, i].values)
+            process_lb.iloc[:, i] = lb
+            process_ub.iloc[:, i] = ub
+    else:
+        # Compute material bounds (multiplicative) — original hardcoded logic
+        materials_lb = initial_materials.copy().astype(float)
+        materials_ub = initial_materials.copy().astype(float)
+        for i in range(len(materials_bound)):
+            f1 = initial_materials.iloc[:, i] * (1 / (1 + materials_bound[i]))
+            f2 = initial_materials.iloc[:, i] * (1 + materials_bound[i])
+            materials_lb.iloc[:, i] = np.minimum(f1, f2)
+            materials_ub.iloc[:, i] = np.maximum(f1, f2)
 
-    # K0: additive +/- 300
-    process_lb.iloc[:, 1] = initial_process.iloc[:, 1] - process_bound[1]
-    process_ub.iloc[:, 1] = initial_process.iloc[:, 1] + process_bound[1]
+        # Compute process bounds
+        process_lb = initial_process.copy().astype(float)
+        process_ub = initial_process.copy().astype(float)
+
+        # SigmaC, alpha1, L0, GrainSize_200: zero lower bound, multiplicative upper
+        for i in [0, 2, 3, 4]:
+            f1 = 0
+            f2 = initial_process.iloc[:, i] * (1 + process_bound[i])
+            process_lb.iloc[:, i] = np.minimum(f1, f2)
+            process_ub.iloc[:, i] = np.maximum(f1, f2)
+
+        # K0: additive +/- 300
+        process_lb.iloc[:, 1] = initial_process.iloc[:, 1] - process_bound[1]
+        process_ub.iloc[:, 1] = initial_process.iloc[:, 1] + process_bound[1]
 
     # Flatten bounds: [materials | process]
     para_lb = np.concatenate([materials_lb.values.flatten(), process_lb.values.flatten()])
@@ -390,23 +459,63 @@ def save_results(model, params, mainfile):
 def main():
     """Main execution function."""
     print(f"Using device: {DEVICE}")
-    print(f"Materials: {MATERIALS}")
-    print(f"Data sources: {DATA_SOURCES}")
 
-    # Load data from database
-    print("Loading experimental data from database...")
-    fit_data, process_condition, experiment_labels = load_from_database(
-        source_path=SOURCE_CSV,
-        experiments_path=EXPERIMENTS_CSV,
-        materials=MATERIALS,
-        data_sources=DATA_SOURCES,
-    )
+    # Load initial guesses and bounds from mainfile.xlsx (primary source).
+    # Edit mainfile.xlsx to change parameters — no Python knowledge needed.
+    mainfile_params = None
+    if MAINFILE_PATH.exists():
+        print(f"Loading parameters from {MAINFILE_PATH}")
+        mainfile_params = parse_mainfile_general(MAINFILE_PATH)
+
+    dataset_process_defaults = None
+
+    if mainfile_params and 'filenames' in mainfile_params:
+        # File-based loading: mainfile.xlsx lists explicit data filenames
+        materials = list(mainfile_params['material_defaults'].keys())
+        print(f"Materials: {materials}")
+        print(f"Loading {len(mainfile_params['filenames'])} datasets from {MAINFILE_DATA_DIR}")
+        fit_data, process_condition, experiment_labels = load_from_mainfile_data(
+            data_dir=MAINFILE_DATA_DIR,
+            filenames=mainfile_params['filenames'],
+            material_names=mainfile_params['material_names'],
+        )
+        dataset_process_defaults = mainfile_params['dataset_process_defaults']
+
+    elif mainfile_params:
+        # Database loading with mainfile-driven material list
+        materials = list(mainfile_params['material_defaults'].keys())
+        data_sources = None
+        print(f"Materials: {materials}")
+        print(f"Data sources: {data_sources}")
+        print("Loading experimental data from database...")
+        fit_data, process_condition, experiment_labels = load_from_database(
+            source_path=SOURCE_CSV,
+            experiments_path=EXPERIMENTS_CSV,
+            materials=materials,
+            data_sources=data_sources,
+        )
+
+    else:
+        print(f"WARNING: {MAINFILE_PATH} not found, using hardcoded fallback defaults.")
+        print("  -> Create a mainfile.xlsx to configure initial guesses and bounds.")
+        materials = _FALLBACK_MATERIALS
+        data_sources = _FALLBACK_DATA_SOURCES
+        print(f"Materials: {materials}")
+        print(f"Data sources: {data_sources}")
+        print("Loading experimental data from database...")
+        fit_data, process_condition, experiment_labels = load_from_database(
+            source_path=SOURCE_CSV,
+            experiments_path=EXPERIMENTS_CSV,
+            materials=materials,
+            data_sources=data_sources,
+        )
 
     n_experiments = len(experiment_labels)
     print(f"Found {n_experiments} experiments: {experiment_labels}")
 
     # Build config DataFrame (same format as config.csv)
-    mainfile = build_config(process_condition, experiment_labels)
+    mainfile = build_config(process_condition, experiment_labels, mainfile_params,
+                            dataset_process_defaults)
     n_materials = mainfile['Melting_T'].nunique()
 
     material_names = [label.split('_')[0] for label in experiment_labels]
@@ -417,7 +526,7 @@ def main():
     y_data = fit_data["StressThickness"]
 
     # Setup parameters
-    params = setup_parameters(mainfile)
+    params = setup_parameters(mainfile, mainfile_params)
 
     # Scale data
     scaler_x = MinMaxScaler(feature_range=(0.1, 1.1))

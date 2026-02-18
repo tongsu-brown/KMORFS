@@ -221,6 +221,101 @@ def load_from_database(source_path, experiments_path, materials, data_sources=No
     return Fit_data, process_condition, experiment_labels
 
 
+def load_from_mainfile_data(data_dir, filenames, material_names):
+    """Load data from .txt files listed in mainfile.xlsx.
+
+    Each .txt file is tab-separated with columns:
+    thickness, StressThickness, R, T, P, Melting_T
+
+    Parameters
+    ----------
+    data_dir : str or Path
+        Directory containing the .txt data files.
+    filenames : list of str
+        Data file names (one per dataset).
+    material_names : list of str
+        Material name per dataset (same length as filenames).
+
+    Returns
+    -------
+    tuple
+        (Fit_data, process_condition, experiment_labels) where:
+        - Fit_data: DataFrame with thickness, StressThickness, Index columns
+        - process_condition: DataFrame with R, T, P, Melting_T per experiment
+        - experiment_labels: list of str labels
+    """
+    from pathlib import Path
+    data_dir = Path(data_dir)
+
+    Fit_data = None
+    process_rows = []
+    experiment_labels = []
+
+    for dataset_index, (fname, mat_name) in enumerate(zip(filenames, material_names)):
+        file_path = data_dir / fname
+        temp_data = _read_mixed_encoding(
+            str(file_path),
+            sep=r"[\t,]+",
+            engine="python",
+            skipinitialspace=True,
+        )
+
+        # Extract process conditions from first data row
+        first_row = temp_data.iloc[0]
+        R = float(first_row['R'])
+        T = float(first_row['T'])
+        P = float(first_row['P'])
+        Melting_T = float(first_row['Melting_T'])
+
+        # Sort by thickness
+        temp_data = temp_data.sort_values('thickness').reset_index(drop=True)
+
+        # Adaptive interpolation (same logic as load_from_database / RawData_extract)
+        thickness_range = temp_data['thickness'].max() - temp_data['thickness'].min()
+        exponent = 0.7
+        scale_factor = 0.44
+        max_points = 10
+        min_points = 4
+        number_of_data = min(max_points, max(min_points,
+                                              int(thickness_range ** exponent * scale_factor)))
+
+        interp_thickness = np.linspace(
+            temp_data['thickness'].min(),
+            temp_data['thickness'].max(),
+            number_of_data,
+        )
+        interp_stress = np.interp(
+            interp_thickness,
+            temp_data['thickness'].values,
+            temp_data['StressThickness'].values,
+        )
+
+        idx = dataset_index + 1
+        fitting_data = pd.DataFrame({
+            'thickness': interp_thickness,
+            'StressThickness': interp_stress,
+            'Index': int(idx),
+        })
+
+        if Fit_data is None:
+            Fit_data = fitting_data
+        else:
+            Fit_data = pd.concat([Fit_data, fitting_data])
+
+        process_rows.append({
+            'R': R, 'T': T, 'P': P, 'Melting_T': Melting_T,
+        })
+
+        label = f"{mat_name}_R{R}_T{int(T)}_P{P}"
+        experiment_labels.append(label)
+
+    if Fit_data is None:
+        raise ValueError(f"No data loaded from {data_dir}")
+
+    process_condition = pd.DataFrame(process_rows)
+    return Fit_data, process_condition, experiment_labels
+
+
 def _read_mixed_encoding(path, **kwargs):
     """
     Try reading CSV with multiple encodings (utf-8, utf-16, latin-1).
