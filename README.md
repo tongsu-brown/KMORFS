@@ -71,12 +71,16 @@ KMORFS-db/
 │   └── alloy_extension.py                      # AlloyMaterialDependentExtension
 ├── general_stress_thickness/                   # Mode 1: General fitting
 │   ├── fit_general_stress.py
+│   ├── mainfile.xlsx                           # Initial guesses, bounds, data config
+│   ├── mainfile_data/                          # Per-dataset .txt data files
 │   └── example/
 │       ├── general_CrVW_example.ipynb          # BCC refractory metals
 │       ├── general_Cu_example.ipynb            # FCC Cu (multi-source)
 │       └── general_Ni_example.ipynb            # FCC Ni (multi-source)
 ├── alloy_extension_stress_thickness/           # Mode 2: Alloy fitting
 │   ├── fit_alloy_stress.py
+│   ├── mainfile.xlsx                           # Initial guesses, bounds, data config
+│   ├── mainfile_data/                          # Per-dataset .txt data files
 │   └── example/
 │       ├── alloy_CrW_example.ipynb             # Cr-W binary alloys
 │       └── alloy_VMo_example.ipynb             # V-Mo binary alloys
