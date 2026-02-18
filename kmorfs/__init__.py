@@ -7,6 +7,7 @@ evolution in thin film materials during Physical Vapor Deposition (PVD).
 
 from .stress_equation import stress_equation
 from .stress_equation_notorch import stress_equation_batch
+from .stress_equation_early_state import es_stress_equation, compute_initial_pre_term
 from .data_utils import RawData_extract, load_from_database
 from .alloy_extension import AlloyMaterialDependentExtension
 from .model import GeneralSTFModel, AlloySTFModel
@@ -14,6 +15,8 @@ from .model import GeneralSTFModel, AlloySTFModel
 __all__ = [
     "stress_equation",
     "stress_equation_batch",
+    "es_stress_equation",
+    "compute_initial_pre_term",
     "RawData_extract",
     "load_from_database",
     "AlloyMaterialDependentExtension",

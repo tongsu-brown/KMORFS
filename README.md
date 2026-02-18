@@ -60,6 +60,7 @@ KMORFS-db/
 │   ├── __init__.py
 │   ├── stress_equation.py                      # Torch-compatible stress equation
 │   ├── stress_equation_notorch.py              # NumPy-only batch stress equation
+│   ├── stress_equation_early_state.py          # Early-state ellipsoidal grain-cap model
 │   ├── data_utils.py                           # load_from_database(), RawData_extract()
 │   ├── model.py                                # GeneralSTFModel & AlloySTFModel
 │   └── alloy_extension.py                      # AlloyMaterialDependentExtension
@@ -74,12 +75,17 @@ KMORFS-db/
 │   └── example/
 │       ├── alloy_CrW_example.ipynb             # Cr-W binary alloys
 │       └── alloy_VMo_example.ipynb             # V-Mo binary alloys
-└── incremental_stress/                         # Mode 3: Steady-state stress fitting
-    ├── Ti-Zr-N.csv
-    └── Ti_Zr_N_SSSF_showcase.ipynb
+├── incremental_stress/                         # Mode 3: Steady-state stress fitting
+│   ├── Ti-Zr-N.csv
+│   └── Ti_Zr_N_SSSF_showcase.ipynb
+└── early_state_stress_thickness/               # Mode 4: Early-state fitting
+    ├── fit_early_state_stress.py
+    ├── data/{Ag,Au,Ni}/                        # xlsx experiment data
+    └── example/
+        └── early_state_Ag_example.ipynb        # Ag at 7 temperatures
 ```
 
-## Three Fitting Modes
+## Four Fitting Modes
 
 ### Mode 1: General Stress-Thickness Fitting
 
@@ -142,6 +148,38 @@ Demonstrates the steady-state stress fitting (SSSF) model on Ti-Zr-N nitride dat
 jupyter notebook incremental_stress/Ti_Zr_N_SSSF_showcase.ipynb
 ```
 
+### Mode 4: Early-State Stress-Thickness Fitting
+
+Models stress-thickness in the **nucleation and coalescence regime** of thin film growth using ellipsoidal grain-cap geometry with grain boundary area derivatives (dA/dt). This is fundamentally different physics from Modes 1–2 (which model continuous films). Uses SciPy `least_squares` with `soft_l1` loss (no PyTorch required).
+
+| Parameter type | Per | Parameters |
+|---|---|---|
+| Per-dataset (float) | Dataset | SigmaC, K0, alpha1, L_nul |
+| Per-material (shared) | Material | Sigma0, BetaD, Ea, Mfda, Grain size at 400 nm |
+
+**Supported materials:**
+
+| Material | Datasets | Conditions | Typical cost |
+|---|---|---|---|
+| Ag | 9 | T = 193–373 K, R = 0.013–0.55 nm/s | ~12 |
+| Au | 4 | T = 303–523 K | ~2 |
+| Ni | 6 | T = 300–473 K | ~3 |
+
+**Data:** Local xlsx files for Ag, Au, Ni (included in `early_state_stress_thickness/data/`). Each material has a `mainfile.xlsx` that stores initial parameter values, bounds, and variability settings.
+
+```bash
+cd early_state_stress_thickness
+python fit_early_state_stress.py
+```
+
+**Configure** by editing the top of `fit_early_state_stress.py`:
+```python
+MATERIAL = "Ag"   # "Ag", "Au", or "Ni"
+```
+
+**Example notebook:**
+- `early_state_Ag_example.ipynb` — Ag at 7 temperatures (193–373 K) + 2 rate variants
+
 ## Tutorial: Fitting Your Own Data
 
 ### Step 1: Add your data to the database
@@ -191,6 +229,8 @@ The stress equation computes instantaneous film stress as the sum of three compo
 
 Input conditions: deposition rate (R, nm/s), temperature (T, K), pressure (P, Pa), melting temperature (Tm, K).
 
+The **early-state model** (Mode 4) uses a different formulation for the nucleation/coalescence regime: grains are modeled as ellipsoidal caps with shape parameter `p_k`, and stress arises from grain boundary area derivatives (dA/dt) rather than energetic/pressure terms.
+
 ## Database Coverage
 
 The experiment database contains **258 experiments** across:
@@ -203,9 +243,15 @@ The experiment database contains **258 experiments** across:
 
 If you use this code or database, please cite:
 
+> T. Su, E. Chason, "Analysis of early stage stress during Volmer-Weber growth of polycrystalline thin films," *Acta Materialia*, vol. 301, 121534 (2025). [DOI: 10.1016/j.actamat.2025.121534](https://doi.org/10.1016/j.actamat.2025.121534)
+
 > E. Chason, T. Su, Z. Rao, "Computational tool for analyzing stress in thin films," *Surface and Coatings Technology*, vol. 474, 130099 (2023). [DOI: 10.1016/j.surfcoat.2023.130099](https://doi.org/10.1016/j.surfcoat.2023.130099)
 
 > T. Su, Z. Rao, S. Berman, D. Depla, E. Chason, "Analysis of stress in sputter-deposited films using a kinetic model for Cu, Ni, Co, Cr, Mo, W," *Applied Surface Science*, vol. 613, 156000 (2023). [DOI: 10.1016/j.apsusc.2022.156000](https://doi.org/10.1016/j.apsusc.2022.156000)
+
+## License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
 ## Author
 

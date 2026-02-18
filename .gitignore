@@ -9,3 +9,4 @@ build/
 .env
 .venv/
 .claude/
+nul
