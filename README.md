@@ -14,7 +14,16 @@ cd KMORFS
 pip install -r requirements.txt
 ```
 
-### 2. Run a fitting script
+### 2. Launch the GUI (recommended)
+
+```bash
+python kmorfs_gui.py
+```
+
+The GUI provides a four-panel launcher (one button per mode) with a live output log.
+See [GUI Launcher](#gui-launcher) for details.
+
+### 3. Or run a fitting script directly
 
 ```bash
 # General mode: fit Cr, V, W stress-thickness curves
@@ -30,10 +39,61 @@ cd incremental_stress
 python fit_incremental_stress.py
 ```
 
-### 3. Or open an example notebook
+### 4. Or open an example notebook
 
 ```bash
 jupyter notebook general_stress_thickness/example/general_Cu_example.ipynb
+```
+
+## GUI Launcher
+
+`kmorfs_gui.py` provides a clean desktop interface for launching all four fitting modes without using the command line.
+
+```bash
+python kmorfs_gui.py
+```
+
+![GUI layout](https://raw.githubusercontent.com/tongsu-brown/KMORFS/master/kmorfs_gui_screenshot.png)
+
+**Layout:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  KMORFS — Kinetic Model of Residual Film Stress         │
+│  Produced by Chason Research Group, Brown University    │
+├────────────────────────┬────────────────────────────────┤
+│  Mode 1 (blue)         │  Mode 2 (green)                │
+│  General Stress-       │  Incremental (Steady-State)    │
+│  Thickness             │  Stress                        │
+│  [Run] [Stop] [Folder] │  [Run] [Stop] [Folder]         │
+├────────────────────────┼────────────────────────────────┤
+│  Mode 3 (amber)        │  Mode 4 (violet)               │
+│  Alloy Extension       │  Early-State Nucleation        │
+│  [Run] [Stop] [Folder] │  [Run] [Stop] [Folder]         │
+├─────────────────────────────────────────────────────────┤
+│  Output Log                                   [Clear]   │
+│  (live stdout/stderr from the running script)           │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Button functions:**
+
+| Button | Action |
+|--------|--------|
+| **Run** | Launches the mode's fitting script as a subprocess; stdout/stderr stream live into the Output Log |
+| **Stop** | Sends a terminate signal to the running process |
+| **Folder** | Opens the mode's working directory in Windows Explorer |
+
+**Features:**
+- Multiple modes can run simultaneously (each in its own thread)
+- Each card shows an inline status: `Idle` → `Running...` → `Done ✓` / `Error (rc=N)`
+- Output Log persists across runs; **Clear** wipes it
+- Matplotlib plot windows from each script open normally alongside the GUI
+- Requires only the standard library (`tkinter`) — no extra packages
+
+**Customisation:** Edit the `PYTHON` constant at the top of `kmorfs_gui.py` if your Python interpreter is at a different path:
+```python
+PYTHON = r"D:\anaconda3\envs\data2060new\python.exe"
 ```
 
 ## Requirements
@@ -57,6 +117,7 @@ pip install -r requirements.txt
 
 ```
 KMORFS-db/
+├── kmorfs_gui.py                               # GUI launcher (four-mode interface)
 ├── data/                                       # Shared experiment database
 │   ├── source.csv                              # Experiment metadata (material, R, T, P, ...)
 │   └── all_experiments.csv                     # Thickness / stress-thickness data points
