@@ -1,12 +1,21 @@
-__pycache__/
-*.pyc
-*.pyo
-.ipynb_checkpoints/
-output/
-*.egg-info/
-dist/
-build/
-.env
-.venv/
+# Backup files
+*.bak*
+
+# Claude Code session files
 .claude/
-nul
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Output / temp
+fit_output.txt
+tmp_*.py
+
+# OS
+.DS_Store
+Thumbs.db
