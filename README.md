@@ -53,7 +53,7 @@ jupyter notebook general_stress_thickness/example/general_Cu_example.ipynb
 python kmorfs_gui.py
 ```
 
-![GUI layout](kmorfs_gui_screenshot.png)
+[View screenshot](kmorfs_gui_screenshot.png)
 
 **Layout:**
 
