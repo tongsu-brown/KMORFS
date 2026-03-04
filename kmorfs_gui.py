@@ -15,7 +15,7 @@ from tkinter import ttk, scrolledtext
 from pathlib import Path
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-PYTHON = r"D:\anaconda3\envs\data2060new\python.exe"
+PYTHON = sys.executable   # use whichever Python is running this GUI
 BASE   = Path(__file__).resolve().parent
 
 MODES = [
