@@ -6,15 +6,40 @@ A physics-informed machine learning framework for modeling residual stress evolu
 
 ## Quick Start
 
-### 1. Clone and install
+### Step 1 — Get the code
+
+**Option A: Download ZIP (no Git required)**
+
+1. Go to **https://github.com/tongsu-brown/KMORFS**
+2. Click the green **`<> Code`** button → **Download ZIP**
+3. Extract the ZIP to any folder (e.g. `C:\Users\you\KMORFS`)
+
+**Option B: Clone with Git**
+
+If you have Git installed, open a terminal and run:
 
 ```bash
 git clone https://github.com/tongsu-brown/KMORFS.git
 cd KMORFS
+```
+
+> Don't have Git? Download it from https://git-scm.com/downloads, or just use Option A above.
+
+---
+
+### Step 2 — Install Python dependencies
+
+Make sure you have **Python 3.9 or later**. Then open a terminal, navigate to the KMORFS folder, and run:
+
+```bash
 pip install -r requirements.txt
 ```
 
-### 2. Launch the GUI (recommended)
+> **Anaconda users:** open an Anaconda Prompt instead of a regular terminal, activate your environment first (`conda activate myenv`), then run the command above.
+
+---
+
+### Step 3 — Launch the GUI (recommended)
 
 ```bash
 python kmorfs_gui.py
@@ -23,7 +48,9 @@ python kmorfs_gui.py
 The GUI provides a four-panel launcher (one button per mode) with a live output log.
 See [GUI Launcher](#gui-launcher) for details.
 
-### 3. Or run a fitting script directly
+---
+
+### Step 4 — Or run a fitting script directly
 
 ```bash
 # General mode: fit Cr, V, W stress-thickness curves
@@ -39,7 +66,7 @@ cd incremental_stress
 python fit_incremental_stress.py
 ```
 
-### 4. Or open an example notebook
+### Step 5 — Or open an example notebook
 
 ```bash
 jupyter notebook general_stress_thickness/example/general_Cu_example.ipynb
@@ -90,11 +117,6 @@ python kmorfs_gui.py
 - Output Log persists across runs; **Clear** wipes it
 - Matplotlib plot windows from each script open normally alongside the GUI
 - Requires only the standard library (`tkinter`) — no extra packages
-
-**Customisation:** Edit the `PYTHON` constant at the top of `kmorfs_gui.py` if your Python interpreter is at a different path:
-```python
-PYTHON = r"D:\anaconda3\envs\data2060new\python.exe"
-```
 
 ## Requirements
 
