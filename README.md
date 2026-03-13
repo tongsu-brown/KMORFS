@@ -66,11 +66,44 @@ cd incremental_stress
 python fit_incremental_stress.py
 ```
 
-### Step 5 — Or open an example notebook
+### Step 5 — Try a ready-made example
 
-```bash
-jupyter notebook general_stress_thickness/example/general_Cu_example.ipynb
-```
+The `example/` folder inside each mode contains **ready-to-run example mainfiles** you
+can copy-paste to get started immediately — no Python knowledge needed.
+
+**How to use an example mainfile:**
+
+1. Browse to the example folder for your mode (see table below).
+2. Copy the example file you want (e.g. `mainfile_example_CrVW.xlsx`).
+3. Paste it into the **mode's main folder** (next to `fit_*.py`) and rename it
+   **`mainfile.xlsx`**, replacing the existing one.
+4. Press **Run** in the GUI (or run `python fit_general_stress.py` from the terminal).
+
+> **Tip:** Keep a backup of the original `mainfile.xlsx` before overwriting it.
+
+#### General Stress-Thickness examples (`general_stress_thickness/example/`)
+
+| File | Materials | Datasets |
+|------|-----------|----------|
+| `mainfile_example_Cr.xlsx` | Cr only | 6 |
+| `mainfile_example_CrVW.xlsx` | Cr + V + W | 20 |
+| `mainfile_example_Mo.xlsx` | Mo only | 5 |
+
+Data files for these examples are already included in
+`general_stress_thickness/mainfile_data/` — no extra download needed.
+
+#### Alloy Extension examples (`alloy_extension_stress_thickness/example/`)
+
+| File | Materials (pure → alloy) | Datasets |
+|------|--------------------------|----------|
+| `mainfile_example_CrW_alloy.xlsx` | Cr, W, Cr3W (25%W), CrW (50%W) | 23 |
+| `mainfile_example_WV_alloy.xlsx` | W, V, WV3 (75%V), WV (50%V), WV2 (67%V) | 31 |
+
+> **Pure elements must always appear before alloys** in the mainfile rows — the
+> example files are already ordered correctly.
+
+Data files are already included in
+`alloy_extension_stress_thickness/mainfile_data/` — no extra download needed.
 
 ## GUI Launcher
 
@@ -154,19 +187,24 @@ KMORFS-db/
 │   └── alloy_extension.py                      # AlloyMaterialDependentExtension
 ├── general_stress_thickness/                   # Mode 1: General fitting
 │   ├── fit_general_stress.py
-│   ├── mainfile.xlsx                           # Initial guesses, bounds, data config
+│   ├── mainfile.xlsx                           # Active config (edit this to change fitting)
 │   ├── mainfile_data/                          # Per-dataset .txt data files
 │   └── example/
-│       ├── general_CrVW_example.ipynb          # BCC refractory metals
-│       ├── general_Cu_example.ipynb            # FCC Cu (multi-source)
-│       └── general_Ni_example.ipynb            # FCC Ni (multi-source)
+│       ├── mainfile_example_Cr.xlsx            # ← ready-to-run: Cr only (6 datasets)
+│       ├── mainfile_example_CrVW.xlsx          # ← ready-to-run: Cr + V + W (20 datasets)
+│       ├── mainfile_example_Mo.xlsx            # ← ready-to-run: Mo only (5 datasets)
+│       ├── general_CrVW_example.ipynb          # Notebook: BCC refractory metals
+│       ├── general_Cu_example.ipynb            # Notebook: FCC Cu (multi-source)
+│       └── general_Ni_example.ipynb            # Notebook: FCC Ni (multi-source)
 ├── alloy_extension_stress_thickness/           # Mode 2: Alloy fitting
 │   ├── fit_alloy_stress.py
-│   ├── mainfile.xlsx                           # Initial guesses, bounds, data config
+│   ├── mainfile.xlsx                           # Active config (edit this to change fitting)
 │   ├── mainfile_data/                          # Per-dataset .txt data files
 │   └── example/
-│       ├── alloy_CrW_example.ipynb             # Cr-W binary alloys
-│       └── alloy_VMo_example.ipynb             # V-Mo binary alloys
+│       ├── mainfile_example_CrW_alloy.xlsx     # ← ready-to-run: Cr-W system (23 datasets)
+│       ├── mainfile_example_WV_alloy.xlsx      # ← ready-to-run: W-V system (31 datasets)
+│       ├── alloy_CrW_example.ipynb             # Notebook: Cr-W binary alloys
+│       └── alloy_VMo_example.ipynb             # Notebook: V-Mo binary alloys
 ├── incremental_stress/                         # Mode 3: Steady-state stress fitting
 │   ├── fit_incremental_stress.py
 │   ├── mainfile.xlsx                           # Initial guesses, bounds, data config
@@ -196,13 +234,30 @@ cd general_stress_thickness
 python fit_general_stress.py
 ```
 
-**Configure** by editing the top of `fit_general_stress.py`:
+**Quickest way to start — use an example mainfile:**
+
+| Copy this file from `example/` | To run |
+|---|---|
+| `mainfile_example_Cr.xlsx` | Cr only — fewest parameters, fastest |
+| `mainfile_example_CrVW.xlsx` | Cr + V + W — standard three-metal case |
+| `mainfile_example_Mo.xlsx` | Mo only |
+
+Copy the file of your choice into `general_stress_thickness/`, rename it `mainfile.xlsx`
+(replacing the existing one), then press **Run** in the GUI.
+All required data files are already in `mainfile_data/`.
+
+**Alternatively, configure by editing `mainfile.xlsx` directly:**
+- Rows 6+ list one dataset per row; column A is the material name, column B is the data filename
+- Edit initial parameter values in those rows to tune the starting point
+- Edit row 5 (bound magnitudes) to widen or tighten the search range
+
+**Or configure in code** (advanced):
 ```python
 MATERIALS = ["Cr", "V", "W"]       # Which materials to fit
 DATA_SOURCES = ["Su"]               # Filter by source (None = all sources)
 ```
 
-**Example notebooks:**
+**Example notebooks** (require Jupyter):
 - `general_CrVW_example.ipynb` — BCC refractory metals (Cr, V, W) from Su's data
 - `general_Cu_example.ipynb` — Cu using all available published data sources
 - `general_Ni_example.ipynb` — Ni using all available published data sources
@@ -223,14 +278,28 @@ cd alloy_extension_stress_thickness
 python fit_alloy_stress.py
 ```
 
-**Configure:**
+**Quickest way to start — use an example mainfile:**
+
+| Copy this file from `example/` | System | Compositions |
+|---|---|---|
+| `mainfile_example_CrW_alloy.xlsx` | Cr-W | Cr, W, Cr3W (25%W), CrW (50%W) |
+| `mainfile_example_WV_alloy.xlsx` | W-V | W, V, WV3 (75%V), WV (50%V), WV2 (67%V) |
+
+Copy the file of your choice into `alloy_extension_stress_thickness/`, rename it
+`mainfile.xlsx`, then press **Run** in the GUI.
+All required data files are already in `mainfile_data/`.
+
+> **Rule:** In the mainfile, **pure element rows must come before alloy rows**.
+> The example files are already ordered correctly.
+
+**Alternatively, configure in code** (advanced):
 ```python
 MATERIALS = ["Cr", "W", "Cr-25W", "Cr-50W"]   # Pure elements first!
 N_PURE_ELEMENTS = 2
 DATA_SOURCES = ["Su"]
 ```
 
-**Example notebooks:**
+**Example notebooks** (require Jupyter):
 - `alloy_CrW_example.ipynb` — Cr + W + Cr-25W, Cr-50W
 - `alloy_VMo_example.ipynb` — V + Mo + V-25Mo, V-50Mo, V-75Mo
 
