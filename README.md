@@ -61,9 +61,9 @@ python fit_general_stress.py
 cd alloy_extension_stress_thickness
 python fit_alloy_stress.py
 
-# Incremental mode: fit Ti-Zr-N steady-state stress
+# Incremental mode: fit all examples (Ti-Zr-N, Mo, Ni) in one go
 cd incremental_stress
-python fit_incremental_stress.py
+python fit_incremental_stress.py --all
 ```
 
 ### Step 5 — Try a ready-made example
@@ -207,8 +207,13 @@ KMORFS-db/
 │       └── alloy_VMo_example.ipynb             # Notebook: V-Mo binary alloys
 ├── incremental_stress/                         # Mode 3: Steady-state stress fitting
 │   ├── fit_incremental_stress.py
-│   ├── mainfile.xlsx                           # Initial guesses, bounds, data config
-│   ├── Ti-Zr-N.csv                            # Example SSSF dataset
+│   ├── mainfile.xlsx                           # Default config (Ti-Zr-N)
+│   ├── Ti_Zr-N_mainfile.xlsx                  # ← ready-to-run: TiN / ZrN / TiZrN2 nitride
+│   ├── Mo_mainfile.xlsx                       # ← ready-to-run: Mo metal (sigmaC ≠ 0)
+│   ├── Ni_mainfile.xlsx                       # ← ready-to-run: Ni metal (per-row grain sizes)
+│   ├── Ti-Zr-N.csv                            # Ti-Zr-N SSSF data
+│   ├── Mo.csv                                 # Mo data (18 pts, GS = 50 nm, T = 300 K)
+│   ├── Ni.csv                                 # Ni data (10 pts, per-row GS, T = 293–473 K)
 │   └── Ti_Zr_N_SSSF_showcase.ipynb            # Tutorial notebook
 └── early_state_stress_thickness/               # Mode 4: Early-state fitting
     ├── fit_early_state_stress.py
@@ -305,24 +310,45 @@ DATA_SOURCES = ["Su"]
 
 ### Mode 3: Incremental / Steady-State Stress Fitting
 
-Models steady-state stress as a function of deposition rate (rather than thickness) for multi-composition systems. Alloy-dependent parameters are blended from pure-element endpoints via rule of mixtures. Uses SciPy L-BFGS-B optimization with NumPy (no PyTorch required).
+Models steady-state stress as a function of deposition rate (rather than thickness). Alloy-dependent parameters (lprime, aprime, bprime) are blended from pure-element endpoints via rule of mixtures. Uses SciPy L-BFGS-B optimization with NumPy (no PyTorch required).
 
 | Parameter type | Per | Parameters |
 |---|---|---|
 | Process | Dataset | R, P, T |
-| Material (independent) | Composition | sigma0, betaD, diffusivity, p0, grainSize |
+| Material (independent) | Composition | sigmaC, sigma0, betaD, diffusivity, p0 |
 | Material (alloy-blended) | Composition | lprime, aprime, bprime |
+| Fixed or per-row | Row | grainSize (from CSV `grain size (nm)` column) |
 
-**Run the script:**
+> **Metals vs. nitrides:** For metals (Mo, Ni), `sigmaC` (compressive kinetic component) can be non-zero and is included as an optimizable parameter. For nitrides (Ti-Zr-N), `sigmaC ≈ 0` and is not needed. Grain sizes can also vary per data row (e.g. Ni) — just include a `grain size (nm)` column in the CSV.
+
+**Run a single example:**
 ```bash
 cd incremental_stress
-python fit_incremental_stress.py
+python fit_incremental_stress.py                              # Ti-Zr-N (default)
+python fit_incremental_stress.py --mainfile Mo_mainfile.xlsx  # Mo
+python fit_incremental_stress.py --mainfile Ni_mainfile.xlsx  # Ni
 ```
 
-**Configure** by editing `mainfile.xlsx`:
+**Run all examples at once (batch mode):**
+```bash
+python fit_incremental_stress.py --all
+```
+Discovers every `*_mainfile*.xlsx` in the directory, fits each in sequence, and saves results to `output/<mainfile-stem>/`.
+
+**Ready-to-run examples:**
+
+| Mainfile | Material | Notes |
+|---|---|---|
+| `Ti_Zr-N_mainfile.xlsx` | TiN, ZrN, TiZrN2 | Nitride ternary; alloy blending; grainSize per composition |
+| `Mo_mainfile.xlsx` | Mo | Metal; `sigmaC = −8 GPa`; constant GS = 50 nm |
+| `Ni_mainfile.xlsx` | Ni | Metal; per-row grain sizes (8–358 nm); T = 293–473 K |
+
+**Configure by editing a mainfile:**
 - Parameter initial guesses and bounds (rows 3–5)
-- `data_file` column: CSV filename (e.g. `Ti-Zr-N.csv`)
-- `material_map` column: maps CSV material names to composition values (e.g. `TiN=0;ZrN=1;TiZrN2=0.5`)
+- Include `sigmaC` as a column to enable its optimization (for metals)
+- `data_file` column: CSV filename (e.g. `Mo.csv`)
+- `material_map` column: maps CSV material names to composition fractions (e.g. `Mo=0`)
+- Add a `grain size (nm)` column to the CSV for per-row grain sizes
 
 **Tutorial notebook:**
 - `Ti_Zr_N_SSSF_showcase.ipynb` — Step-by-step walkthrough of the Ti-Zr-N fitting

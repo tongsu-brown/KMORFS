@@ -103,6 +103,9 @@ class steady_state_model:
         assert len(self.lower) == len(self.parameter_keys)
         assert len(self.upper) == len(self.parameter_keys)
 
+        # Store full X template so frozen params (e.g., per-row grain sizes) are preserved
+        self.X_template = X.copy()
+
         # Extract initial parameter matrix
         X_init = np.zeros((X.shape[0], len(self.parameter_keys)))
         for i, key_idx in enumerate(self.parameter_keys):
@@ -154,9 +157,13 @@ class steady_state_model:
         if curr_Z is None:
             curr_Z = self.Z.flatten()
 
-        X_updated = np.zeros((self.process_condition.shape[0], len(self.parameter_keys) + 5 + 5))
+        # Fixed shape: 5 process cols + 13 parameter cols = 18 (matches stress_equation_batch)
+        X_updated = np.zeros((self.process_condition.shape[0], 5 + len(PARAMETER_KEYS)))
         X_updated[:, :4] = self.process_condition
         X_updated[:, 4] = self.composition
+        # Seed frozen parameter columns from the initial template
+        # (preserves per-row values like grain sizes not in parameter_keys)
+        X_updated[:, 5:] = self.X_template[:, 5:]
 
         curr_Z = curr_Z.reshape(len(np.unique(self.composition)), len(self.parameter_keys))
         X_params = self.lower + (self.upper - self.lower + 1e-8) * curr_Z
@@ -234,11 +241,15 @@ def load_data(data_path, material_map, parameter):
             if key in parameter:
                 param_to_model[idx, PARAMETER_KEYS.index(key)] = parameter[key][comp_to_idx[comp]]
 
+    # Per-row grain size takes priority over per-composition value when provided in CSV
+    if 'grain size (nm)' in Data.columns:
+        param_to_model[:, PARAMETER_KEYS.index('grainSize')] = Data['grain size (nm)'].to_numpy()
+
     X = np.hstack((Process_para, param_to_model))
     return Data, y, X
 
 
-def plot_results(Data, y, model, material_map):
+def plot_results(Data, y, model, material_map, output_dir):
     """Plot per-material subplots colored by pressure."""
     y_pred = model.predict()
     mater_sequence = Data['material'].unique()
@@ -261,6 +272,8 @@ def plot_results(Data, y, model, material_map):
         R = Data.loc[mater_indices, 'R']
         P = Data.loc[mater_indices, 'P']
 
+        stress_range = max(abs(y.max()), abs(y.min())) * 1.3
+
         color_idx = 0
         for pressure in np.unique(P):
             pressure_mask = mater_indices & (Data['P'] == pressure)
@@ -276,7 +289,7 @@ def plot_results(Data, y, model, material_map):
         ax.set_xlabel('Growth rate (nm/s)')
         ax.set_ylabel('Stress (GPa)')
         ax.set_title(mater)
-        ax.set_ylim([-2.5, 2])
+        ax.set_ylim([-stress_range, stress_range])
         ax.legend()
 
     # Remove unused subplots
@@ -285,15 +298,15 @@ def plot_results(Data, y, model, material_map):
 
     plt.tight_layout()
 
-    OUTPUT_DIR.mkdir(exist_ok=True)
-    filepath = OUTPUT_DIR / "fitting_result.jpg"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    filepath = output_dir / "fitting_result.jpg"
     fig.savefig(filepath, format="jpg", dpi=300)
-    print(f"Saved plot to {filepath}")
-    plt.show()
+    print(f"  Saved plot to {filepath}")
+    plt.close(fig)
     return fig
 
 
-def save_results(model, parameter):
+def save_results(model, parameter, output_dir):
     """Save optimized parameters to CSV."""
     p_opt = model.get_denormalized_params()
     unique_comps = np.unique(model.composition)
@@ -307,24 +320,27 @@ def save_results(model, parameter):
 
     result_df = pd.DataFrame(rows)
 
-    OUTPUT_DIR.mkdir(exist_ok=True)
-    output_path = OUTPUT_DIR / "optimized_parameters.csv"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / "optimized_parameters.csv"
     result_df.to_csv(output_path, index=False)
-    print(f"Saved results to {output_path}")
+    print(f"  Saved results to {output_path}")
     return result_df
 
 
-def main():
-    """Main execution function."""
+def run_one(mainfile_path, output_dir):
+    """Parse one mainfile, fit the model, plot and save to output_dir.
+
+    Returns the final loss, or None if the mainfile could not be loaded.
+    """
+    label = mainfile_path.stem
+
     # 1. Parse mainfile (or use fallbacks)
-    if MAINFILE_PATH.exists():
-        print(f"Loading parameters from {MAINFILE_PATH}")
-        parameter, Bound = parse_mainfile_incremental(MAINFILE_PATH)
-        # Convert betaD at room temperature
+    if mainfile_path.exists():
+        print(f"  Loading parameters from {mainfile_path.name}")
+        parameter, Bound = parse_mainfile_incremental(mainfile_path)
         parameter['betaD'] = (np.array(parameter['betaD']) * kB * 300).tolist()
         data_file = parameter.pop('data_file', _FALLBACK_DATA_FILE)
         material_map_raw = parameter.pop('material_map', _FALLBACK_MATERIAL_MAP)
-        # Ensure material_map is a dict (parse_mainfile_incremental returns dict already)
         if isinstance(material_map_raw, str):
             material_map = {}
             for pair in material_map_raw.split(';'):
@@ -332,11 +348,10 @@ def main():
                 material_map[k.strip()] = float(v.strip())
         else:
             material_map = material_map_raw
-        print(f"  Compositions: {parameter['composition']}")
-        print(f"  Data file: {data_file}")
+        print(f"  Data file   : {data_file}")
         print(f"  Material map: {material_map}")
     else:
-        print(f"WARNING: {MAINFILE_PATH} not found, using hardcoded fallback defaults.")
+        print(f"  WARNING: {mainfile_path.name} not found, using hardcoded Ti-Zr-N defaults.")
         parameter = {k: list(v) if isinstance(v, list) else v
                      for k, v in _FALLBACK_PARAMETER.items()}
         Bound = _FALLBACK_BOUND.copy()
@@ -345,32 +360,79 @@ def main():
 
     # 2. Load data
     data_path = SCRIPT_DIR / data_file
-    print(f"Loading data from {data_path}")
+    if not data_path.exists():
+        print(f"  ERROR: data file {data_path} not found — skipping {label}")
+        return None
     Data, y, X = load_data(data_path, material_map, parameter)
-    print(f"  {len(Data)} data points, {Data['material'].nunique()} materials")
+    print(f"  {len(Data)} data points, {Data['material'].nunique()} material(s)")
 
     # 3. Create model and fit
-    print("Fitting model...")
+    print("  Fitting...")
     model = steady_state_model(X, Bound)
     final_Z, final_loss = model.fit(y, optimizer='L-BFGS-B', maxiter=500)
-    print(f"  Final loss: {final_loss:.6f}")
+    print(f"  Final loss  : {final_loss:.6f}")
 
-    # Print optimized parameters
+    # Print optimised parameters
     p_opt = model.get_denormalized_params()
-    unique_comps = np.unique(model.composition)
-    print("Optimized parameters (denormalized):")
+    print("  Optimised parameters:")
     for i, key_idx in enumerate(model.parameter_keys):
-        print(f"  {PARAMETER_KEYS[key_idx]:>12s}: {p_opt[:, i]}")
+        print(f"    {PARAMETER_KEYS[key_idx]:>12s}: {p_opt[:, i]}")
 
     # 4. Plot and save
-    print("Generating plots...")
-    plot_results(Data, y, model, material_map)
-
-    print("Saving results...")
-    result_df = save_results(model, parameter)
+    plot_results(Data, y, model, material_map, output_dir)
+    result_df = save_results(model, parameter, output_dir)
     print(result_df.to_string(index=False))
 
-    print("Done!")
+    return final_loss
+
+
+def main():
+    """Main execution function.
+
+    Single-run mode (default):
+        python fit_incremental_stress.py
+        python fit_incremental_stress.py --mainfile Mo_mainfile.xlsx
+
+    Batch mode — runs every *mainfile*.xlsx found in this directory:
+        python fit_incremental_stress.py --all
+    """
+    import argparse
+    parser = argparse.ArgumentParser(description='KMORFS Incremental Stress Fitting')
+    parser.add_argument('--mainfile', default='mainfile.xlsx',
+                        help='Mainfile to use for a single run (default: mainfile.xlsx). '
+                             'Examples: Mo_mainfile.xlsx, Ni_mainfile.xlsx')
+    parser.add_argument('--all', action='store_true',
+                        help='Batch mode: discover and run every *mainfile*.xlsx in this '
+                             'directory; results saved to output/<mainfile-stem>/')
+    args, _ = parser.parse_known_args()
+
+    if args.all:
+        # Discover every named mainfile (*_mainfile*.xlsx) in the script directory
+        mainfiles = sorted(SCRIPT_DIR.glob('*_mainfile*.xlsx'))
+        if not mainfiles:
+            print("No *mainfile*.xlsx files found — nothing to do.")
+            return
+        print(f"Batch mode: found {len(mainfiles)} mainfile(s):")
+        for mf in mainfiles:
+            print(f"  {mf.name}")
+        print()
+
+        for mf in mainfiles:
+            label = mf.stem
+            out = SCRIPT_DIR / 'output' / label
+            print(f"{'='*60}")
+            print(f"Running: {mf.name}  ->  output/{label}/")
+            print(f"{'='*60}")
+            loss = run_one(mf, out)
+            status = f"loss={loss:.6f}" if loss is not None else "SKIPPED"
+            print(f"Done ({status})\n")
+
+        print("All done!")
+    else:
+        mainfile_path = SCRIPT_DIR / args.mainfile
+        loss = run_one(mainfile_path, OUTPUT_DIR)
+        if loss is not None:
+            print("Done!")
 
 
 if __name__ == "__main__":
